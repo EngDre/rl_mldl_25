@@ -1,9 +1,7 @@
 """Test an RL agent on the OpenAI Gym Hopper environment"""
 import argparse
-
 import torch
 import gym
-
 from env.custom_hopper import *
 from agent import Agent, Policy
 
@@ -13,47 +11,45 @@ def parse_args():
     parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
     parser.add_argument('--render', default=False, action='store_true', help='Render the simulator')
     parser.add_argument('--episodes', default=10, type=int, help='Number of test episodes')
-
     return parser.parse_args()
 
 args = parse_args()
 
-
 def main():
+    env = gym.make('CustomHopper-source-v0')
+    # env = gym.make('CustomHopper-target-v0')
 
-	env = gym.make('CustomHopper-source-v0')
-	# env = gym.make('CustomHopper-target-v0')
+    print('Action space:', env.action_space)
+    print('State space:', env.observation_space)
+    print('Dynamics parameters:', env.get_parameters())
+    
+    observation_space_dim = env.observation_space.shape[-1]
+    action_space_dim = env.action_space.shape[-1]
 
-	print('Action space:', env.action_space)
-	print('State space:', env.observation_space)
-	print('Dynamics parameters:', env.get_parameters())
-	
-	observation_space_dim = env.observation_space.shape[-1]
-	action_space_dim = env.action_space.shape[-1]
+    policy = Policy(observation_space_dim, action_space_dim)
+    policy.load_state_dict(torch.load(args.model), strict=True)
 
-	policy = Policy(observation_space_dim, action_space_dim)
-	policy.load_state_dict(torch.load(args.model), strict=True)
+    agent = Agent(policy, device=args.device)
 
-	agent = Agent(policy, device=args.device)
+    total_reward = 0
+    for episode in range(args.episodes):
+        done = False
+        test_reward = 0
+        state = env.reset()
 
-	for episode in range(args.episodes):
-		done = False
-		test_reward = 0
-		state = env.reset()
+        while not done:
+            action, _ = agent.get_action(state, evaluation=True)
+            state, reward, done, info = env.step(action.detach().cpu().numpy())
 
-		while not done:
+            if args.render:
+                env.render()
 
-			action, _ = agent.get_action(state, evaluation=True)
+            test_reward += reward
 
-			state, reward, done, info = env.step(action.detach().cpu().numpy())
+        total_reward += test_reward
+        print(f"Episode: {episode} | Return: {test_reward}")
 
-			if args.render:
-				env.render()
-
-			test_reward += reward
-
-		print(f"Episode: {episode} | Return: {test_reward}")
-	
+    print(f"Average return over {args.episodes} episodes: {total_reward/args.episodes}")
 
 if __name__ == '__main__':
-	main()
+    main()
